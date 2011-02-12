@@ -34,7 +34,10 @@ trait Generic extends Protocol {
    * </pre>
    */
   def wrap[S, T](name: String)(to : S => T, from : T => S)(implicit fmt : Format[T]) = new Format[S]{
-    def writes(s : S) = JsObject(List((tojson(name).asInstanceOf[JsString], tojson(to(s)))))
+    def writes(s : S) = (tojson(name) <|*|> tojson(to(s))) match {
+      case Success((k, v)) => JsObject(Map() ++ List((k.asInstanceOf[JsString], v))).success
+      case Failure(errs) => errs.fail
+    }
     def reads(js : JsValue) = js match {
       case m@JsObject(_) =>
         val f = field[T](name, m)
@@ -56,19 +59,21 @@ trait Generic extends Protocol {
     def writes(s : S) = delegate.writes(s);
   }
 
-
   <#list 2..8 as i> 
   <#assign typeParams><#list 1..i as j>T${j}<#if i !=j>,</#if></#list></#assign>
 
   def asProduct${i}[S, ${typeParams}](<#list 1..i as j>f${j}: String<#if i != j>,</#if></#list>)(apply : (${typeParams}) => S)(unapply : S => Product${i}[${typeParams}])(implicit <#list 1..i as j>bin${j}: Format[T${j}]<#if i != j>,</#if></#list>) = new Format[S]{
     def writes(s: S) = {
       val product = unapply(s)
-      JsObject(
-        List(
+      List(
           <#list 1..i as j>
-          (tojson(f${j}).asInstanceOf[JsString], tojson(product._${j}))<#if i != j>,</#if>
+          tojson(f${j}) <|*|> tojson(product._${j})<#if i != j>,</#if>
           </#list>
-        ))
+      ).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, (JsValue, JsValue)] match {
+        case Success(kvs) => 
+          JsObject(Map.empty[JsString, JsValue] ++ kvs.map{case (k, v) => (k.asInstanceOf[JsString], v)}).success
+        case Failure(errs) => errs.fail
+      }
     }
     def reads(js: JsValue) = js match {
       case m@JsObject(_) => // m is the Map

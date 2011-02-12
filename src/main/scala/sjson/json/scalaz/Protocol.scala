@@ -7,11 +7,11 @@ import Scalaz._
 import dispatch.json._
 
 trait Writes[T] {
-  def writes(o: T): JsValue
+  def writes(o: T): ValidationNEL[String, JsValue]
 }
 
 trait Reads[T] {
-  def reads(json: JsValue): Validation[NonEmptyList[String], T]
+  def reads(json: JsValue): ValidationNEL[String, T]
 }
 
 trait Format[T] extends Writes[T] with Reads[T]
@@ -35,13 +35,13 @@ object DefaultProtocol extends DefaultProtocol {
 
   // field[String](('lastName ! str), js)
   // field[Address](('address ! obj), js)
-  def field[T](name: String, js: JsValue)(implicit fjs: Reads[T]): Validation[NonEmptyList[String], T] = {
+  def field[T](name: String, js: JsValue)(implicit fjs: Reads[T]): ValidationNEL[String, T] = {
     val JsObject(m) = js
     m.get(JsString(name)).map(fromjson[T](_)(fjs)).getOrElse(("field " + name + " not found").fail.liftFailNel)
   }
 
   // field[String]((('address ! obj) andThen ('city ! str)), js)
-  def field[T](f: (JsValue => JsValue), js: JsValue)(implicit fjs: Reads[T]): Validation[NonEmptyList[String], T] = try {
+  def field[T](f: (JsValue => JsValue), js: JsValue)(implicit fjs: Reads[T]): ValidationNEL[String, T] = try {
     fromjson[T](f(js))(fjs)
   } catch {
     case e: Exception => e.getMessage.fail.liftFailNel

@@ -11,7 +11,7 @@ trait BasicTypes extends Protocol {
   implicit def optionFormat[T](implicit fmt : Format[T]) : Format[Option[T]] = new Format[Option[T]] {
     def writes(ot: Option[T]) = ot match {
       case Some(t) => tojson(t)
-      case None => JsNull
+      case None => JsNull.success
     }
     def reads(json: JsValue) = json match {
       case JsNull => None.success
@@ -37,18 +37,27 @@ trait BasicTypes extends Protocol {
         ).tupled
       }
       def writes(tuple: ${typeName}) = tuple match {
-        case (<#list 1..i as j>t${j}<#if i != j>,</#if></#list>) => JsArray(List(
-      <#list 1..i as j>tojson(t${j})(fmt${j})<#if i != j>,</#if></#list>))
-        case _ => throw new RuntimeException("Tuple" + ${i} + " expected")
+        case (<#list 1..i as j>t${j}<#if i != j>,</#if></#list>) => 
+          val l = List(
+      <#list 1..i as j>tojson(t${j})(fmt${j})<#if i != j>,</#if></#list>).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, JsValue]
+          l match {
+            case Success(js) => JsArray(js).success
+            case Failure(errs) => errs.fail 
+          }
+        case _ => ("Tuple" + ${i} + " expected").fail.liftFailNel
       }
   }
   </#list>
 }
 
-trait CollectionTypes extends BasicTypes { // with Generic {
+trait CollectionTypes extends BasicTypes with Generic {
 
   implicit def listFormat[T](implicit fmt : Format[T]) : Format[List[T]] = new Format[List[T]] {
-    def writes(ts: List[T]) = JsArray(ts.map(t => tojson(t)(fmt)))
+    def writes(ts: List[T]) = 
+      ts.map(t => tojson(t)(fmt)).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, JsValue] match {
+        case Success(js) => JsArray(js).success
+        case Failure(errs) => errs.fail
+      }
     def reads(json: JsValue) = json match {
       case JsArray(ts) => ts.map(t => fromjson(t)(fmt)).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, T] 
       case _ => "List expected".fail.liftFailNel
@@ -57,7 +66,11 @@ trait CollectionTypes extends BasicTypes { // with Generic {
 
   import scala.reflect.Manifest
   implicit def arrayFormat[T](implicit fmt : Format[T], mf: Manifest[T]) : Format[Array[T]] = new Format[Array[T]] {
-    def writes(ts: Array[T]) = JsArray((ts.map(t => tojson(t)(fmt))).toList)
+    def writes(ts: Array[T]) = 
+      ts.map(t => tojson(t)(fmt)).toList.sequence[({type λ[α]=ValidationNEL[String, α]})#λ, JsValue] match {
+        case Success(js) => JsArray(js).success
+        case Failure(errs) => errs.fail
+      }
     def reads(json: JsValue) = json match {
       case JsArray(ts) => (ts.map(t => fromjson(t)(fmt)).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, T]).map(listToArray(_))
       case _ => "Array expected".fail.liftFailNel
@@ -66,7 +79,13 @@ trait CollectionTypes extends BasicTypes { // with Generic {
   def listToArray[T: Manifest](ls: List[T]): Array[T] = ls.toArray
 
   implicit def mapFormat[K, V](implicit fmtk: Format[K], fmtv: Format[V]) : Format[Map[K, V]] = new Format[Map[K, V]] {
-    def writes(ts: Map[K, V]) = JsObject(ts.map{case (k, v) => ((tojson(k.toString)).asInstanceOf[JsString], tojson(v)(fmtv))})
+    def writes(ts: Map[K, V]) = 
+      ts.map{ case(k, v) => 
+        (tojson(k.toString) <|*|> tojson(v)(fmtv))
+      }.toList.sequence[({type λ[α]=ValidationNEL[String, α]})#λ, (JsValue, JsValue)] match {
+        case Success(kvs) => JsObject(kvs.map{case (key, value) => (key.asInstanceOf[JsString], value)}).success
+        case Failure(errs) => errs.fail
+      }
     def reads(json: JsValue) = json match {
       case JsObject(m) => 
         val Success(keys) = 
@@ -93,10 +112,10 @@ trait CollectionTypes extends BasicTypes { // with Generic {
   **/
 }
 
-trait StandardTypes { // extends CollectionTypes {
+trait StandardTypes extends CollectionTypes {
 
   implicit object BigIntFormat extends Format[BigInt] {
-    def writes(o: BigInt) = JsValue.apply(o)
+    def writes(o: BigInt) = JsValue.apply(o).success
     def reads(json: JsValue) = json match {
       case JsNumber(n) => n.toBigInt.success
       case _ => "BigInt expected".fail.liftFailNel
@@ -104,7 +123,7 @@ trait StandardTypes { // extends CollectionTypes {
   }
 
   implicit object BigDecimalFormat extends Format[BigDecimal] {
-    def writes(o: BigDecimal) = JsValue.apply(o)
+    def writes(o: BigDecimal) = JsValue.apply(o).success
     def reads(json: JsValue) = json match {
       case JsNumber(n) => n.success
       case _ => "BigDecimal expected".fail.liftFailNel

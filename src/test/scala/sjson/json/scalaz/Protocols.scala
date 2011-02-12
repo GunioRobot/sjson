@@ -23,12 +23,16 @@ object Protocols {
         case _ => "JsObject expected".fail.liftFailNel
       }
 
-      def writes(p: Address): JsValue =
-        JsObject(List(
-          (tojson("no").asInstanceOf[JsString], tojson(p.no)), 
-          (tojson("street").asInstanceOf[JsString], tojson(p.street)), 
-          (tojson("city").asInstanceOf[JsString], tojson(p.city)),
-          (tojson("zip").asInstanceOf[JsString], tojson(p.zip)) ))
+      def writes(p: Address) =
+        List(
+          tojson("no") <|*|> tojson(p.no), 
+          tojson("street") <|*|> tojson(p.street), 
+          tojson("city") <|*|> tojson(p.city), 
+          tojson("zip") <|*|> tojson(p.zip)
+        ).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, (JsValue, JsValue)] match {
+          case Success(kvs) => JsObject(kvs.map{case (key, value) => (key.asInstanceOf[JsString], value)}).success
+          case Failure(errs) => errs.fail
+        }
     }
   }
 
@@ -42,12 +46,16 @@ object Protocols {
 
         case _ => "JsObject expected".fail.liftFailNel
       }
-      def writes(p: Person): JsValue =
-        JsObject(List(
-          (tojson("lastName").asInstanceOf[JsString], tojson(p.lastName)), 
-          (tojson("firstName").asInstanceOf[JsString], tojson(p.firstName)), 
-          (tojson("age").asInstanceOf[JsString], tojson(p.age)),
-          (tojson("address").asInstanceOf[JsString], tojson(p.address)) ))
+      def writes(p: Person) =
+        List(
+          tojson("lastName") <|*|> tojson(p.lastName), 
+          tojson("firstName") <|*|> tojson(p.firstName), 
+          tojson("age") <|*|> tojson(p.age), 
+          tojson("address") <|*|> tojson(p.address)
+        ).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, (JsValue, JsValue)] match {
+          case Success(kvs) => JsObject(kvs.map{case (key, value) => (key.asInstanceOf[JsString], value)}).success
+          case Failure(errs) => errs.fail
+        }
     }
   }
 
@@ -61,12 +69,39 @@ object Protocols {
 
         case _ => "JsObject expected".fail.liftFailNel
       }
-      def writes(p: Person): JsValue =
-        JsObject(List(
-          (tojson("lastName").asInstanceOf[JsString], tojson(p.lastName)), 
-          (tojson("firstName").asInstanceOf[JsString], tojson(p.firstName)), 
-          (tojson("age").asInstanceOf[JsString], tojson(p.age)),
-          (tojson("address").asInstanceOf[JsString], tojson(p.address)) ))
+      def writes(p: Person) =
+        List(
+          tojson("lastName") <|*|> tojson(p.lastName), 
+          tojson("firstName") <|*|> tojson(p.firstName), 
+          tojson("age") <|*|> tojson(p.age), 
+          tojson("address") <|*|> tojson(p.address)
+        ).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, (JsValue, JsValue)] match {
+          case Success(kvs) => JsObject(kvs.map{case (key, value) => (key.asInstanceOf[JsString], value)}).success
+          case Failure(errs) => errs.fail
+        }
+    }
+  }
+
+  object IncorrectPersonProtocol1 extends DefaultProtocol {
+    import AddressProtocol._
+
+    implicit object PersonFormat extends Format[Person] {
+      def reads(json: JsValue): ValidationNEL[String, Person] = json match {
+        case m@JsObject(_) => 
+          (field[String]("LastName", m) |@| field[String]("firstname", m) |@| field[Int]("age", m) |@| field[Address]("address", m)) { Person }
+
+        case _ => "JsObject expected".fail.liftFailNel
+      }
+      def writes(p: Person) =
+        List(
+          tojson("lastname") <|*|> tojson(p.lastName), 
+          tojson("firstname") <|*|> tojson(p.firstName), 
+          tojson("age") <|*|> tojson(p.age), 
+          tojson("addres") <|*|> tojson(p.address)
+        ).sequence[({type λ[α]=ValidationNEL[String, α]})#λ, (JsValue, JsValue)] match {
+          case Success(kvs) => JsObject(kvs.map{case (key, value) => (key.asInstanceOf[JsString], value)}).success
+          case Failure(errs) => errs.fail
+        }
     }
   }
 
@@ -100,10 +135,10 @@ object Protocols {
           case _ => "JsObject expected".fail.liftFailNel
         }
       }
-      def writes(a: Derived): JsValue = {
-        val o = tojson(a: Base)
+      def writes(a: Derived) = {
+        val Success(o) = tojson(a: Base)
         val JsObject(m) = o
-        JsObject(m ++ List((tojson("specialFlag").asInstanceOf[JsString], tojson(a.specialFlag))))
+        JsObject(m ++ List((JsString("specialFlag"), tojson(a.specialFlag).toOption.get))).success
       }
     }
   }
@@ -116,9 +151,9 @@ object Protocols {
       case JsString("Post") => Post.success
       case _ => "Invalid HttpType".fail.liftFailNel
     }
-    def writes(a: HttpType): JsValue = a match {
-      case Get => JsString("Get")
-      case Post => JsString("Post")
+    def writes(a: HttpType) = a match {
+      case Get => JsString("Get").success
+      case Post => JsString("Post").success
     }
   }
 

@@ -20,7 +20,7 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
       import PersonProtocol._
       val a = Address(12, "Monroe Street", "Denver", "80231")
       val p = Person("ghosh", "debasish", 20, a)
-      fromjson[Person](tojson(p)) should equal(p.success)
+      tojson(p) map fromjson[Person] should equal(p.success.success)
     }
   }
 
@@ -30,19 +30,33 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
       import IncorrectPersonProtocol._
       val a = Address(12, "Monroe Street", "Denver", "80231")
       val p = Person("ghosh", "debasish", 20, a)
-      (fromjson[Person](tojson(p))).fail.toOption.get.list should equal (List("field LastName not found", "field firstname not found"))
+      val Success(Failure(l)) = tojson(p) map fromjson[Person]
+      l.list should equal (List("field LastName not found", "field firstname not found"))
+    }
+  }
+
+  describe("Serialization using incorrect Person protocol1") {
+    it ("serialization should fail") {
+      import Protocols._
+      import IncorrectPersonProtocol1._
+      val a = Address(12, "Monroe Street", "Denver", "80231")
+      val p = Person("ghosh", "debasish", 20, a)
+      println(tojson(p))
+      println(tojson(p) map fromjson[Person])
+      // val Success(Failure(l)) = tojson(p) map fromjson[Person]
+      // l.list should equal (List("field LastName not found", "field firstname not found"))
     }
   }
 
   describe("Serialization of lists") {
     it ("should serialize list of Ints") {
       val l1 = List(100, 200, 300, 400)
-      fromjson[List[Int]](tojson(l1)) should equal(l1.success)
+      tojson(l1) map fromjson[List[Int]] should equal(l1.success.success)
     }
 
     it ("should serialize list of Strings") {
       val l2 = List("dg", "mc", "rc", "nd")
-      fromjson[List[String]](tojson(l2)) should equal(l2.success)
+      tojson(l2) map fromjson[List[String]] should equal(l2.success.success)
     }
   }
   val jsonString = 
@@ -110,14 +124,14 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
     it("should serialize into json and back") {
       import Protocols._
       val shop = Shop("Shoppers Stop", "dress material", 1000)
-      fromjson[Shop](tojson(shop)) should equal(shop.success)
+      tojson(shop) map fromjson[Shop] should equal(shop.success.success)
     }
   }
 
   describe("Serialization of Maps") {
     it ("should serialize Map of Strings & Strings") {
       val m = Map("100" -> "dg", "200" -> "mc")
-      fromjson[Map[String, String]](tojson(m)) should equal(m.success)
+      tojson(m) map fromjson[Map[String, String]] should equal(m.success.success)
     }
   }
 
@@ -126,7 +140,7 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
       import Protocols._
       val addressBook = AddressBook("Debasish Ghosh", 
         List(Address(100, "monroe st", "denver", "80231"), Address(23, "pine drive", "santa clara", "95054")))
-      fromjson[AddressBook](tojson(addressBook)) should equal(addressBook.success)
+      tojson(addressBook) map fromjson[AddressBook] should equal(addressBook.success.success)
     }
   }
 
@@ -136,7 +150,7 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
       val account = Account("123", "Debasish Ghosh", 
         Array(Address(100, "monroe st", "denver", "80231"), Address(234, "pine drive", "santa clara", "95054")))
 
-      val Success(ac) = fromjson[Account](tojson(account))
+      val Success(Success(ac)) = (tojson(account) map fromjson[Account])
       ac.no should equal(account.no)
       ac.name should equal(account.name)
       ac.addresses should be === account.addresses
@@ -146,38 +160,38 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
   describe("Serialization of Option") {
     it("should serialize an option field") {
       val str = Some("debasish")
-      fromjson[Option[String]](tojson[Option[String]](str)) should equal(str.success)
-      fromjson[Option[String]](tojson[Option[String]](None)) should equal(None.success)
+      tojson[Option[String]](str) map fromjson[Option[String]] should equal(str.success.success)
+      tojson[Option[String]](None) map fromjson[Option[String]] should equal(None.success.success)
 
       val i = Some(200)
-      fromjson[Option[Int]](tojson[Option[Int]](i)) should equal(i.success)
+      tojson[Option[Int]](i) map fromjson[Option[Int]] should equal(i.success.success)
     }
     it("should serialize AddressWithOptionalCity") {
       import sjson.json.TestBeans._
       import Protocols._
       val ad = AddressWithOptionalCity("garer math", Some("mumbai"), "400087")
-      fromjson[AddressWithOptionalCity](tojson(ad)) should equal(ad.success)
+      tojson(ad) map fromjson[AddressWithOptionalCity] should equal(ad.success.success)
     }
     it("should serialize AddressWithOptionalCity without city") {
       import sjson.json.TestBeans._
       import Protocols._
       val ad = AddressWithOptionalCity("garer math", None, "400087")
-      fromjson[AddressWithOptionalCity](tojson(ad)) should equal(ad.success)
+      tojson(ad) map fromjson[AddressWithOptionalCity] should equal(ad.success.success)
     }
   }
 
   describe("Serialization of tuples") {
     it("should serialize tuples of primitive types") {
       val t1 = ("debasish", 12)
-      fromjson[Tuple2[String, Int]](tojson(t1)) should equal(t1.success)
+      tojson(t1) map fromjson[Tuple2[String, Int]] should equal(t1.success.success)
       val t2 = ("debasish", 12, "jonas")
-      fromjson[Tuple3[String, Int, String]](tojson(t2)) should equal(t2.success)
+      tojson(t2) map fromjson[Tuple3[String, Int, String]] should equal(t2.success.success)
     }
     it("should serialize tuples of user defined types") {
       import Protocols._
       import AddressProtocol._
       val t1 = ("debasish", Address(102, "monroe st", "denver", "80231"))
-      fromjson[Tuple2[String, Address]](tojson[Tuple2[String, Address]](t1)) should equal(t1.success)
+      tojson[Tuple2[String, Address]](t1) map fromjson[Tuple2[String, Address]] should equal(t1.success.success)
     }
   }
 
@@ -234,7 +248,7 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
   describe("Serialization of complex types") {
     it("should serialize complex types") {
       val l = List(Map("1"->"dg", "2"->"mc"), Map("1"->"irc", "2"->"rc", "3"->"nd"))
-      fromjson[List[Map[String, String]]](tojson(l)) should equal(l.success)
+      tojson(l) map fromjson[List[Map[String, String]]] should equal(l.success.success)
     }
   }
 
@@ -242,12 +256,12 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
     it("should serialize") {
       import Protocols._
       val n = Name("debasish ghosh")
-      fromjson[Name](tojson(n)) should equal(n.success)
+      tojson(n) map fromjson[Name] should equal(n.success.success)
     }
     it("should serialize list wrappers") {
       import Protocols._
       val n = Holder(List("debasish ghosh", "jonas boner", "stephan schmidt"))
-      fromjson[Holder](tojson(n)) should equal(n.success)
+      tojson(n) map fromjson[Holder] should equal(n.success.success)
     }
   }
 
@@ -256,8 +270,8 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
       import Protocols._
       import DerivedProtocol._
       val sa = new Derived("123", "debasish ghosh", List(Address(100, "monroe st", "denver", "80231"), Address(23, "tamarac st", "boulder", "80231")), true)
-      val Success(acc) = fromjson[Derived](tojson(sa))
-      acc should equal(sa)
+      val Success(acc) = tojson(sa) map fromjson[Derived]
+      acc should equal(sa.success)
     }
   }
 
@@ -265,8 +279,8 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
     it("should serialize") {
       import Protocols._
       val h = Http("http://www.google.com", Get)
-      val h1 = fromjson[Http](tojson(h))
-      h1 should equal(h.success)
+      val h1 = tojson(h) map fromjson[Http]
+      h1 should equal(h.success.success)
     }
   }
 
@@ -274,12 +288,12 @@ class TypeclassSerializerSpec extends Spec with ShouldMatchers {
     it("should serialize without recursion") {
       import Protocols._
       val f = Foo("testFoo", List(Bar("test1", None), Bar("test2", None)))
-      fromjson[Foo](tojson(f)) should equal(f.success)
+      tojson(f) map fromjson[Foo] should equal(f.success.success)
     }
     it("should serialize with recursion") {
       import Protocols._
       val fBar = Foo("testFoo", List(Bar("test1", Some(List(Foo("barList", List(Bar("test", None), Bar("test2", None))))))))
-      fromjson[Foo](tojson(fBar)) should equal(fBar.success)
+      tojson(fBar) map fromjson[Foo] should equal(fBar.success.success)
     }
   }
 }
